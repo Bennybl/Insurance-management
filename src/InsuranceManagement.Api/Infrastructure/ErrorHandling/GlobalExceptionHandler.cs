@@ -2,8 +2,8 @@ using System.Text.Json;
 using InsuranceManagement.Api.Application.Common;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace InsuranceManagement.Api.Infrastructure.ErrorHandling;
 
@@ -60,17 +60,17 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 "Business rule conflict.",
                 "The requested change conflicts with the current data state."),
 
-            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException, "Customers.Email") => (
+            DbUpdateException dbUpdateException when IsUniqueViolation(dbUpdateException, "Email") => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "A customer with this email already exists."),
 
-            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException, "Policies.PolicyNumber") => (
+            DbUpdateException dbUpdateException when IsUniqueViolation(dbUpdateException, "PolicyNumber") => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "A policy with this policy number already exists."),
 
-            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException) => (
+            DbUpdateException dbUpdateException when IsUniqueViolation(dbUpdateException) => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "The requested change violates a data integrity rule."),
@@ -94,14 +94,20 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         return problemDetails;
     }
 
-    private static bool IsSqliteConstraintViolation(DbUpdateException exception, string? constraintTarget = null)
+    private static bool IsUniqueViolation(DbUpdateException exception, string? constraintTarget = null)
     {
-        if (exception.InnerException is not SqliteException { SqliteErrorCode: 19 } sqliteException)
+        if (exception.InnerException is not PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgresException)
         {
             return false;
         }
 
-        return string.IsNullOrWhiteSpace(constraintTarget) ||
-            sqliteException.Message.Contains(constraintTarget, StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(constraintTarget))
+        {
+            return true;
+        }
+
+        // EF Core names unique indexes "IX_<Table>_<Column>", so the column name appears in the constraint.
+        return (postgresException.ConstraintName ?? string.Empty)
+            .Contains(constraintTarget, StringComparison.OrdinalIgnoreCase);
     }
 }

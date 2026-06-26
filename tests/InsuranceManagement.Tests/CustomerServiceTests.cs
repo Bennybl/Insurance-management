@@ -1,5 +1,6 @@
 using InsuranceManagement.Api.Application.Customers;
 using InsuranceManagement.Api.Domain;
+using InsuranceManagement.Api.Infrastructure.Repositories;
 using Xunit;
 
 namespace InsuranceManagement.Tests;
@@ -10,7 +11,9 @@ public class CustomerServiceTests
     public async Task CreateAsync_creates_active_customer()
     {
         using var database = await TestDatabase.CreateAsync();
-        var service = new CustomerService(database.Context);
+        var service = new CustomerService(
+            new CustomerRepository(database.Context),
+            new PolicyRepository(database.Context));
 
         var customer = await service.CreateAsync(new CreateCustomerRequest
         {
@@ -58,7 +61,9 @@ public class CustomerServiceTests
         database.Context.Policies.Add(policy);
         await database.Context.SaveChangesAsync();
 
-        var service = new CustomerService(database.Context);
+        var service = new CustomerService(
+            new CustomerRepository(database.Context),
+            new PolicyRepository(database.Context));
 
         await service.DeactivateAsync(customer.Id);
 

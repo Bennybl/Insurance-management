@@ -1,6 +1,7 @@
 using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Domain;
+using InsuranceManagement.Api.Infrastructure.Repositories;
 using Xunit;
 
 namespace InsuranceManagement.Tests;
@@ -12,7 +13,9 @@ public class PolicyServiceTests
     {
         using var database = await TestDatabase.CreateAsync();
         var customer = await AddCustomerAsync(database);
-        var service = new PolicyService(database.Context);
+        var service = new PolicyService(
+            new PolicyRepository(database.Context),
+            new CustomerRepository(database.Context));
 
         var policy = await service.IssueAsync(new IssuePolicyRequest
         {
@@ -52,7 +55,9 @@ public class PolicyServiceTests
         database.Context.Policies.Add(policy);
         await database.Context.SaveChangesAsync();
 
-        var service = new PolicyService(database.Context);
+        var service = new PolicyService(
+            new PolicyRepository(database.Context),
+            new CustomerRepository(database.Context));
 
         await Assert.ThrowsAsync<ConflictException>(() => service.UpdateAsync(policy.Id, new UpdatePolicyRequest
         {

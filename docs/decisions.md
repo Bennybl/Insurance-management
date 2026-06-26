@@ -20,16 +20,18 @@ Reason: the challenge does not define a strict schema. The model should stay sim
 
 Reason: this keeps valid policy types controlled while allowing new products to be added later in the database without changing the `Policy` schema or C# entity model.
 
-## 3. Do Not Add a Repository Layer Yet
+## 3. Use a Per-Entity Repository Layer
 
-`CustomerService` uses `AppDbContext` directly.
+Each aggregate has its own repository: `ICustomerRepository`/`CustomerRepository` and `IPolicyRepository`/`PolicyRepository` (with `PolicyProduct` lookups folded into the policy repository). Services no longer touch `AppDbContext`; all data access goes through the repositories.
 
-Reason: EF Core already provides repository-like behavior through `DbSet` and unit-of-work behavior through `DbContext`. Adding a repository now would mostly wrap EF calls without simplifying the project.
+Reason: this keeps services focused on business rules and mapping, isolates EF Core/provider details behind an interface (useful as the data store evolves), and makes services straightforward to unit-test against a repository.
+
+The repositories share the request-scoped `AppDbContext`, so the `DbContext` remains the unit of work and a single `SaveChangesAsync` still commits one transaction (e.g. customer deactivation cancels the customer's active policies in one save).
 
 Current flow:
 
 ```text
-Controller -> Service -> AppDbContext -> Database
+Controller -> Service -> Repository -> AppDbContext -> Database
 ```
 
 ## 4. Keep DTO Validation Simple
