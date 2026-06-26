@@ -12,9 +12,6 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         IssuePolicyRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidatePolicyDates(request.StartDate, request.EndDate);
-        ValidatePremium(request.PremiumAmount);
-
         var customer = await dbContext.Customers
             .AsNoTracking()
             .FirstOrDefaultAsync(customer => customer.Id == request.CustomerId, cancellationToken);
@@ -107,9 +104,6 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         UpdatePolicyRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidatePolicyDates(request.StartDate, request.EndDate);
-        ValidatePremium(request.PremiumAmount);
-
         var policy = await GetPolicyOrThrowAsync(
             policy => policy.Id == id,
             cancellationToken,
@@ -182,22 +176,6 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         }
 
         return policy;
-    }
-
-    private static void ValidatePolicyDates(DateOnly startDate, DateOnly endDate)
-    {
-        if (startDate >= endDate)
-        {
-            throw new ConflictException("StartDate must be before EndDate.");
-        }
-    }
-
-    private static void ValidatePremium(decimal premiumAmount)
-    {
-        if (premiumAmount <= 0)
-        {
-            throw new ConflictException("PremiumAmount must be positive.");
-        }
     }
 
     private static string NormalizeProductCode(string productCode)

@@ -22,5 +22,12 @@ public class UpdatePolicyRequest : IValidatableObject
                 "StartDate must be before EndDate.",
                 [nameof(StartDate), nameof(EndDate)]);
         }
+
+        if (PremiumAmount <= 0)
+        {
+            yield return new ValidationResult(
+                "PremiumAmount must be positive.",
+                [nameof(PremiumAmount)]);
+        }
     }
 }
