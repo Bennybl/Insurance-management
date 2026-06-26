@@ -49,6 +49,6 @@ NotFoundException -> resource does not exist.
 ConflictException -> valid request, but business rule conflict.
 ```
 
-Reason: services should express business outcomes without directly returning HTTP responses. Controllers or global error handling can map these later to `404` and `409`.
+Reason: services should express business outcomes without directly returning HTTP responses. Global error handling maps these to `404` and `409`.
 
-For duplicate customer emails, we rely on the database unique constraint and convert the related `DbUpdateException` into `ConflictException` instead of doing a separate pre-check query.
+For duplicate customer emails, we rely on the database unique constraint. The global error handler converts the related `DbUpdateException` to a `409 Conflict` response instead of doing a separate pre-check query in `CustomerService`.

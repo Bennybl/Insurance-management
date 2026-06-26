@@ -2,7 +2,6 @@ using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Domain;
 using InsuranceManagement.Api.Infrastructure;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace InsuranceManagement.Api.Application.Customers;
@@ -28,7 +27,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         };
 
         dbContext.Customers.Add(customer);
-        await SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -73,7 +72,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         customer.Address = request.Address.Trim();
         customer.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -136,24 +135,6 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         }
 
         return customer;
-    }
-
-    private async Task SaveChangesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (IsDuplicateCustomerEmail(exception))
-        {
-            throw new ConflictException("A customer with this email already exists.");
-        }
-    }
-
-    private static bool IsDuplicateCustomerEmail(DbUpdateException exception)
-    {
-        return exception.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteException &&
-            sqliteException.Message.Contains("Customers.Email", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeEmail(string email)
