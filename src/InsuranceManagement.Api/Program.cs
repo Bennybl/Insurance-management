@@ -1,3 +1,4 @@
+using InsuranceManagement.Api.Application.Customers;
 using InsuranceManagement.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,6 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
