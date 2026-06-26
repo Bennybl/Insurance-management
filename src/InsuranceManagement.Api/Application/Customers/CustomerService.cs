@@ -2,6 +2,7 @@ using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Domain;
 using InsuranceManagement.Api.Infrastructure;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace InsuranceManagement.Api.Application.Customers;
@@ -13,11 +14,6 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         CancellationToken cancellationToken = default)
     {
         var email = NormalizeEmail(request.Email);
-
-        if (await EmailExistsAsync(email, null, cancellationToken))
-        {
-            throw new ConflictException("A customer with this email already exists.");
-        }
 
         var customer = new Customer
         {
@@ -32,7 +28,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         };
 
         dbContext.Customers.Add(customer);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -70,11 +66,6 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         var email = NormalizeEmail(request.Email);
 
-        if (await EmailExistsAsync(email, id, cancellationToken))
-        {
-            throw new ConflictException("A customer with this email already exists.");
-        }
-
         customer.FirstName = request.FirstName.Trim();
         customer.LastName = request.LastName.Trim();
         customer.Email = email;
@@ -82,7 +73,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         customer.Address = request.Address.Trim();
         customer.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -147,18 +138,22 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return customer;
     }
 
-    private async Task<bool> EmailExistsAsync(
-        string email,
-        Guid? excludedCustomerId,
-        CancellationToken cancellationToken)
+    private async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
-        var normalizedEmail = email.ToUpperInvariant();
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateCustomerEmail(exception))
+        {
+            throw new ConflictException("A customer with this email already exists.");
+        }
+    }
 
-        return await dbContext.Customers.AnyAsync(
-            customer =>
-                customer.Email.ToUpper() == normalizedEmail &&
-                (!excludedCustomerId.HasValue || customer.Id != excludedCustomerId.Value),
-            cancellationToken);
+    private static bool IsDuplicateCustomerEmail(DbUpdateException exception)
+    {
+        return exception.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteException &&
+            sqliteException.Message.Contains("Customers.Email", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeEmail(string email)

@@ -50,3 +50,5 @@ ConflictException -> valid request, but business rule conflict.
 ```
 
 Reason: services should express business outcomes without directly returning HTTP responses. Controllers or global error handling can map these later to `404` and `409`.
+
+For duplicate customer emails, we rely on the database unique constraint and convert the related `DbUpdateException` into `ConflictException` instead of doing a separate pre-check query.
