@@ -17,7 +17,6 @@ public class IssuePolicyRequest : IValidatableObject
     [Required]
     public DateOnly EndDate { get; set; }
 
-    [Range(typeof(decimal), "0.01", "9999999999999999.99")]
     public decimal PremiumAmount { get; set; }
 
     public string? DetailsJson { get; set; }
