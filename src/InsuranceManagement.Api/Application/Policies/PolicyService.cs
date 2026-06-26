@@ -13,32 +13,44 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
     {
         var productCode = NormalizeProductCode(request.ProductCode);
 
-        var issueData = await dbContext.Customers
+        var customer = await dbContext.Customers
             .AsNoTracking()
             .Where(customer => customer.Id == request.CustomerId)
-            .Select(customer => new PolicyIssueData
-            {
-                CustomerId = customer.Id,
-                CustomerIsActive = customer.IsActive,
-                Product = dbContext.PolicyProducts
-                    .Where(product => product.Code == productCode)
-                    .Select(product => new PolicyProductIssueData
-                    {
-                        product.Code,
-                        product.IsActive
-                    })
-                    .FirstOrDefault()
-            })
+            .Select(customer => new { customer.Id, customer.IsActive })
             .FirstOrDefaultAsync(cancellationToken);
 
-        var validatedIssueData = ValidateIssueData(issueData);
+        if (customer is null)
+        {
+            throw new NotFoundException("Customer was not found.");
+        }
+
+        if (!customer.IsActive)
+        {
+            throw new ConflictException("Cannot issue a policy to an inactive customer.");
+        }
+
+        var product = await dbContext.PolicyProducts
+            .AsNoTracking()
+            .Where(product => product.Code == productCode)
+            .Select(product => new { product.Code, product.IsActive })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (product is null)
+        {
+            throw new NotFoundException("Policy product was not found.");
+        }
+
+        if (!product.IsActive)
+        {
+            throw new ConflictException("Cannot issue a policy for an inactive product.");
+        }
 
         var policy = new Policy
         {
             Id = Guid.NewGuid(),
-            CustomerId = validatedIssueData.CustomerId,
+            CustomerId = customer.Id,
             PolicyNumber = GeneratePolicyNumber(),
-            ProductCode = validatedIssueData.ProductCode,
+            ProductCode = product.Code,
             Status = PolicyStatus.Active,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
@@ -166,31 +178,6 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         return policy;
     }
 
-    private static (Guid CustomerId, string ProductCode) ValidateIssueData(PolicyIssueData? issueData)
-    {
-        if (issueData is null)
-        {
-            throw new NotFoundException("Customer was not found.");
-        }
-
-        if (!issueData.CustomerIsActive)
-        {
-            throw new ConflictException("Cannot issue a policy to an inactive customer.");
-        }
-
-        if (issueData.Product is null)
-        {
-            throw new NotFoundException("Policy product was not found.");
-        }
-
-        if (!issueData.Product.IsActive)
-        {
-            throw new ConflictException("Cannot issue a policy for an inactive product.");
-        }
-
-        return (issueData.CustomerId, issueData.Product.Code);
-    }
-
     private static string NormalizeProductCode(string productCode)
     {
         return productCode.Trim().ToUpperInvariant();
@@ -221,21 +208,5 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
             CancelledAt = policy.CancelledAt,
             CancellationReason = policy.CancellationReason
         };
-    }
-
-    private class PolicyIssueData
-    {
-        public Guid CustomerId { get; set; }
-
-        public bool CustomerIsActive { get; set; }
-
-        public PolicyProductIssueData? Product { get; set; }
-    }
-
-    private class PolicyProductIssueData
-    {
-        public string Code { get; set; } = string.Empty;
-
-        public bool IsActive { get; set; }
     }
 }

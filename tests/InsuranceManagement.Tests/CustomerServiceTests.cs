@@ -1,4 +1,3 @@
-using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Customers;
 using InsuranceManagement.Api.Domain;
 using Xunit;
@@ -28,7 +27,7 @@ public class CustomerServiceTests
     }
 
     [Fact]
-    public async Task DeactivateAsync_rejects_customer_with_active_policy()
+    public async Task DeactivateAsync_cancels_customers_active_policies()
     {
         using var database = await TestDatabase.CreateAsync();
         var customer = new Customer
@@ -42,9 +41,7 @@ public class CustomerServiceTests
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
-
-        database.Context.Customers.Add(customer);
-        database.Context.Policies.Add(new Policy
+        var policy = new Policy
         {
             Id = Guid.NewGuid(),
             CustomerId = customer.Id,
@@ -55,11 +52,19 @@ public class CustomerServiceTests
             EndDate = new DateOnly(2027, 1, 1),
             PremiumAmount = 100,
             CreatedAt = DateTimeOffset.UtcNow
-        });
+        };
+
+        database.Context.Customers.Add(customer);
+        database.Context.Policies.Add(policy);
         await database.Context.SaveChangesAsync();
 
         var service = new CustomerService(database.Context);
 
-        await Assert.ThrowsAsync<ConflictException>(() => service.DeactivateAsync(customer.Id));
+        await service.DeactivateAsync(customer.Id);
+
+        Assert.False(customer.IsActive);
+        Assert.Equal(PolicyStatus.Cancelled, policy.Status);
+        Assert.NotNull(policy.CancelledAt);
+        Assert.Equal("Customer deactivated.", policy.CancellationReason);
     }
 }
