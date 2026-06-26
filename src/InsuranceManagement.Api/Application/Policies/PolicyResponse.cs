@@ -2,7 +2,7 @@ using InsuranceManagement.Api.Domain;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public sealed class PolicyResponse
+public class PolicyResponse
 {
     public Guid Id { get; set; }
 

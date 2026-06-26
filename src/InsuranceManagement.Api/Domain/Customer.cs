@@ -1,6 +1,6 @@
 namespace InsuranceManagement.Api.Domain;
 
-public sealed class Customer
+public class Customer
 {
     public Guid Id { get; set; }
 

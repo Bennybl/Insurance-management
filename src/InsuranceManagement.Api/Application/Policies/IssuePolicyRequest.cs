@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public sealed class IssuePolicyRequest : IValidatableObject
+public class IssuePolicyRequest : IValidatableObject
 {
     [Required]
     public Guid CustomerId { get; set; }

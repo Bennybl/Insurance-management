@@ -1,6 +1,6 @@
 namespace InsuranceManagement.Api.Application.Customers;
 
-public sealed class CustomerResponse
+public class CustomerResponse
 {
     public Guid Id { get; set; }
 

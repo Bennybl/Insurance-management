@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public sealed class CancelPolicyRequest
+public class CancelPolicyRequest
 {
     [Required]
     [StringLength(500)]

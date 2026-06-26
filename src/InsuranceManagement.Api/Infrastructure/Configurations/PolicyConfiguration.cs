@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace InsuranceManagement.Api.Infrastructure.Configurations;
 
-public sealed class PolicyConfiguration : IEntityTypeConfiguration<Policy>
+public class PolicyConfiguration : IEntityTypeConfiguration<Policy>
 {
     public void Configure(EntityTypeBuilder<Policy> builder)
     {

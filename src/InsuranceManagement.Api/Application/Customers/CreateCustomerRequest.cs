@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace InsuranceManagement.Api.Application.Customers;
 
-public sealed class CreateCustomerRequest
+public class CreateCustomerRequest
 {
     [Required]
     [StringLength(100)]

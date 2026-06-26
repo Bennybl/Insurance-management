@@ -1,6 +1,6 @@
 namespace InsuranceManagement.Api.Domain;
 
-public sealed class Policy
+public class Policy
 {
     public Guid Id { get; set; }
 

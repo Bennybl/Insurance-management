@@ -3,7 +3,7 @@ using InsuranceManagement.Api.Domain;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public sealed class PolicyFilter
+public class PolicyFilter
 {
     public Guid? CustomerId { get; set; }
 

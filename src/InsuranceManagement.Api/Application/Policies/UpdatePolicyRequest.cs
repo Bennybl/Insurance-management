@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public sealed class UpdatePolicyRequest : IValidatableObject
+public class UpdatePolicyRequest : IValidatableObject
 {
     [Required]
     public DateOnly StartDate { get; set; }
