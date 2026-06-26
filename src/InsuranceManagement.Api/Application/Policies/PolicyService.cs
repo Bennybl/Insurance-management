@@ -12,31 +12,42 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         IssuePolicyRequest request,
         CancellationToken cancellationToken = default)
     {
-        var customer = await dbContext.Customers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(customer => customer.Id == request.CustomerId, cancellationToken);
+        var productCode = NormalizeProductCode(request.ProductCode);
 
-        if (customer is null)
+        var issueData = await dbContext.Customers
+            .AsNoTracking()
+            .Where(customer => customer.Id == request.CustomerId)
+            .Select(customer => new
+            {
+                CustomerId = customer.Id,
+                CustomerIsActive = customer.IsActive,
+                Product = dbContext.PolicyProducts
+                    .Where(product => product.Code == productCode)
+                    .Select(product => new
+                    {
+                        product.Code,
+                        product.IsActive
+                    })
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (issueData is null)
         {
             throw new NotFoundException("Customer was not found.");
         }
 
-        if (!customer.IsActive)
+        if (!issueData.CustomerIsActive)
         {
             throw new ConflictException("Cannot issue a policy to an inactive customer.");
         }
 
-        var productCode = NormalizeProductCode(request.ProductCode);
-        var product = await dbContext.PolicyProducts
-            .AsNoTracking()
-            .FirstOrDefaultAsync(product => product.Code == productCode, cancellationToken);
-
-        if (product is null)
+        if (issueData.Product is null)
         {
             throw new NotFoundException("Policy product was not found.");
         }
 
-        if (!product.IsActive)
+        if (!issueData.Product.IsActive)
         {
             throw new ConflictException("Cannot issue a policy for an inactive product.");
         }
@@ -44,9 +55,9 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         var policy = new Policy
         {
             Id = Guid.NewGuid(),
-            CustomerId = customer.Id,
+            CustomerId = issueData.CustomerId,
             PolicyNumber = GeneratePolicyNumber(),
-            ProductCode = product.Code,
+            ProductCode = issueData.Product.Code,
             Status = PolicyStatus.Active,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
