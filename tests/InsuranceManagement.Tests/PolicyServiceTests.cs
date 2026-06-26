@@ -67,7 +67,90 @@ public class PolicyServiceTests
         }));
     }
 
-    private static async Task<Customer> AddCustomerAsync(TestDatabase database)
+    [Fact]
+    public async Task IssueAsync_throws_NotFound_when_customer_missing()
+    {
+        using var database = await TestDatabase.CreateAsync();
+        var service = NewService(database);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => service.IssueAsync(new IssuePolicyRequest
+        {
+            CustomerId = Guid.NewGuid(),
+            ProductCode = "CAR",
+            StartDate = new DateOnly(2026, 1, 1),
+            EndDate = new DateOnly(2027, 1, 1),
+            PremiumAmount = 100
+        }));
+    }
+
+    [Fact]
+    public async Task IssueAsync_throws_Conflict_when_customer_inactive()
+    {
+        using var database = await TestDatabase.CreateAsync();
+        var customer = await AddCustomerAsync(database, isActive: false);
+        var service = NewService(database);
+
+        await Assert.ThrowsAsync<ConflictException>(() => service.IssueAsync(new IssuePolicyRequest
+        {
+            CustomerId = customer.Id,
+            ProductCode = "CAR",
+            StartDate = new DateOnly(2026, 1, 1),
+            EndDate = new DateOnly(2027, 1, 1),
+            PremiumAmount = 100
+        }));
+    }
+
+    [Fact]
+    public async Task IssueAsync_throws_NotFound_when_product_missing()
+    {
+        using var database = await TestDatabase.CreateAsync();
+        var customer = await AddCustomerAsync(database);
+        var service = NewService(database);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => service.IssueAsync(new IssuePolicyRequest
+        {
+            CustomerId = customer.Id,
+            ProductCode = "NOPE",
+            StartDate = new DateOnly(2026, 1, 1),
+            EndDate = new DateOnly(2027, 1, 1),
+            PremiumAmount = 100
+        }));
+    }
+
+    [Fact]
+    public async Task CancelAsync_cancels_active_policy_and_trims_reason()
+    {
+        using var database = await TestDatabase.CreateAsync();
+        var customer = await AddCustomerAsync(database);
+        var service = NewService(database);
+
+        var policy = await service.IssueAsync(new IssuePolicyRequest
+        {
+            CustomerId = customer.Id,
+            ProductCode = "CAR",
+            StartDate = new DateOnly(2026, 1, 1),
+            EndDate = new DateOnly(2027, 1, 1),
+            PremiumAmount = 100
+        });
+
+        var cancelled = await service.CancelAsync(policy.Id, new CancelPolicyRequest
+        {
+            Reason = "  Customer request  "
+        });
+
+        Assert.Equal(PolicyStatus.Cancelled, cancelled.Status);
+        Assert.NotNull(cancelled.CancelledAt);
+        Assert.Equal("Customer request", cancelled.CancellationReason);
+    }
+
+    private static PolicyService NewService(TestDatabase database)
+    {
+        return new PolicyService(
+            new PolicyRepository(database.Context),
+            new CustomerRepository(database.Context));
+    }
+
+    private static async Task<Customer> AddCustomerAsync(TestDatabase database, bool isActive = true)
     {
         var customer = new Customer
         {
@@ -77,7 +160,7 @@ public class PolicyServiceTests
             Email = $"{Guid.NewGuid():N}@example.com",
             PhoneNumber = "0501234567",
             Address = "Tel Aviv",
-            IsActive = true,
+            IsActive = isActive,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
