@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Domain;
@@ -45,7 +46,9 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
     public async Task<CustomerResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var customer = await GetCustomerOrThrowAsync(id, cancellationToken);
+        var customer = await GetCustomerOrThrowAsync(
+            customer => customer.Id == id,
+            cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -55,13 +58,10 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         UpdateCustomerRequest request,
         CancellationToken cancellationToken = default)
     {
-        var customer = await dbContext.Customers
-            .FirstOrDefaultAsync(customer => customer.Id == id, cancellationToken);
-
-        if (customer is null)
-        {
-            throw new NotFoundException("Customer was not found.");
-        }
+        var customer = await GetCustomerOrThrowAsync(
+            customer => customer.Id == id,
+            cancellationToken,
+            asNoTracking: false);
 
         var email = NormalizeEmail(request.Email);
 
@@ -79,13 +79,10 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
     public async Task DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var customer = await dbContext.Customers
-            .FirstOrDefaultAsync(customer => customer.Id == id, cancellationToken);
-
-        if (customer is null)
-        {
-            throw new NotFoundException("Customer was not found.");
-        }
+        var customer = await GetCustomerOrThrowAsync(
+            customer => customer.Id == id,
+            cancellationToken,
+            asNoTracking: false);
 
         var hasActivePolicies = await dbContext.Policies
             .AnyAsync(
@@ -112,7 +109,9 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        _ = await GetCustomerOrThrowAsync(id, cancellationToken);
+        _ = await GetCustomerOrThrowAsync(
+            customer => customer.Id == id,
+            cancellationToken);
 
         var policies = await dbContext.Policies
             .AsNoTracking()
@@ -123,11 +122,19 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         return policies.Select(MapPolicy).ToList();
     }
 
-    private async Task<Customer> GetCustomerOrThrowAsync(Guid id, CancellationToken cancellationToken)
+    private async Task<Customer> GetCustomerOrThrowAsync(
+        Expression<Func<Customer, bool>> predicate,
+        CancellationToken cancellationToken,
+        bool asNoTracking = true)
     {
-        var customer = await dbContext.Customers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(customer => customer.Id == id, cancellationToken);
+        var query = dbContext.Customers.AsQueryable();
+
+        if (asNoTracking)
+        {
+            query = query.AsNoTracking();
+        }
+
+        var customer = await query.FirstOrDefaultAsync(predicate, cancellationToken);
 
         if (customer is null)
         {
