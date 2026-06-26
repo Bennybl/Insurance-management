@@ -1,4 +1,5 @@
 using InsuranceManagement.Api.Application.Customers;
+using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Infrastructure;
 using InsuranceManagement.Api.Infrastructure.ErrorHandling;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IPolicyService, PolicyService>();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
