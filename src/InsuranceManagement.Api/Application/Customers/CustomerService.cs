@@ -95,8 +95,6 @@ public class CustomerService(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        _ = await GetCustomerOrThrowAsync(id, cancellationToken);
-
         var policies = await policyRepository.GetByCustomerAsync(id, cancellationToken);
 
         return policies.Select(MapPolicy).ToList();
