@@ -67,3 +67,24 @@ dotnet test
 ```
 
 Tests use an in-memory SQLite database and do not require Docker or PostgreSQL.
+
+## Design decisions
+
+The main design decisions for this project are recorded in
+[`docs/decisions.md`](docs/decisions.md). It is a short, focused log — not a full
+architecture document — that captures the key choices made during implementation and
+the reasoning behind each one. The complete implementation plan lives in `plan.md`.
+
+It currently covers:
+
+- **Minimal domain model** — only the fields the challenge needs on `Customer` and `Policy`.
+- **`PolicyProduct` as a lookup table** — seeded products, extendable via the database
+  without changing the schema or entity model.
+- **Per-entity repository layer** — services go through `ICustomerRepository` /
+  `IPolicyRepository` instead of `AppDbContext`; the repositories share the
+  request-scoped context, which stays the unit of work.
+- **Simple DTO validation** — `DataAnnotations` + `IValidatableObject`, no extra dependency.
+- **`CancellationToken` and application exceptions** — services express outcomes via
+  `NotFoundException` / `ConflictException`, which the global handler maps to `404` / `409`.
+
+Read that file before making structural changes so new work stays consistent with these choices.
