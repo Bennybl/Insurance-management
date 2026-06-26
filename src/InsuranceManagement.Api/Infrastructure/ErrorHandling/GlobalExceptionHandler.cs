@@ -45,15 +45,35 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 "Business rule conflict.",
                 conflictException.Message),
 
-            DbUpdateException dbUpdateException when IsUniqueConstraintViolation(dbUpdateException, "Customers.Email") => (
+            BadHttpRequestException badHttpRequestException => (
+                StatusCodes.Status400BadRequest,
+                "Bad request.",
+                badHttpRequestException.Message),
+
+            JsonException => (
+                StatusCodes.Status400BadRequest,
+                "Bad request.",
+                "Request body contains invalid JSON."),
+
+            DbUpdateConcurrencyException => (
+                StatusCodes.Status409Conflict,
+                "Business rule conflict.",
+                "The requested change conflicts with the current data state."),
+
+            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException, "Customers.Email") => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "A customer with this email already exists."),
 
-            DbUpdateException dbUpdateException when IsUniqueConstraintViolation(dbUpdateException, "Policies.PolicyNumber") => (
+            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException, "Policies.PolicyNumber") => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "A policy with this policy number already exists."),
+
+            DbUpdateException dbUpdateException when IsSqliteConstraintViolation(dbUpdateException) => (
+                StatusCodes.Status409Conflict,
+                "Business rule conflict.",
+                "The requested change violates a data integrity rule."),
 
             _ => (
                 StatusCodes.Status500InternalServerError,
@@ -61,18 +81,27 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 "An unexpected error occurred.")
         };
 
-        return new ProblemDetails
+        var problemDetails = new ProblemDetails
         {
             Status = statusCode,
             Title = title,
             Detail = detail,
             Instance = httpContext.Request.Path.ToString()
         };
+
+        problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
+
+        return problemDetails;
     }
 
-    private static bool IsUniqueConstraintViolation(DbUpdateException exception, string constraintTarget)
+    private static bool IsSqliteConstraintViolation(DbUpdateException exception, string? constraintTarget = null)
     {
-        return exception.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteException &&
+        if (exception.InnerException is not SqliteException { SqliteErrorCode: 19 } sqliteException)
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(constraintTarget) ||
             sqliteException.Message.Contains(constraintTarget, StringComparison.OrdinalIgnoreCase);
     }
 }
