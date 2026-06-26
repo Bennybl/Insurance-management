@@ -84,23 +84,27 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
             cancellationToken,
             asNoTracking: false);
 
-        var hasActivePolicies = await dbContext.Policies
-            .AnyAsync(
-                policy => policy.CustomerId == id && policy.Status == PolicyStatus.Active,
-                cancellationToken);
-
-        if (hasActivePolicies)
-        {
-            throw new ConflictException("Customer cannot be deactivated while they have active policies.");
-        }
-
         if (!customer.IsActive)
         {
             return;
         }
 
+        var now = DateTimeOffset.UtcNow;
+
+        var activePolicies = await dbContext.Policies
+            .Where(policy => policy.CustomerId == id && policy.Status == PolicyStatus.Active)
+            .ToListAsync(cancellationToken);
+
+        foreach (var policy in activePolicies)
+        {
+            policy.Status = PolicyStatus.Cancelled;
+            policy.CancelledAt = now;
+            policy.CancellationReason = "Customer deactivated.";
+            policy.UpdatedAt = now;
+        }
+
         customer.IsActive = false;
-        customer.UpdatedAt = DateTimeOffset.UtcNow;
+        customer.UpdatedAt = now;
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
