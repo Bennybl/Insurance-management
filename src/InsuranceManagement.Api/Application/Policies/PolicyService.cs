@@ -1,23 +1,18 @@
 using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Domain;
-using InsuranceManagement.Api.Infrastructure;
-using Microsoft.EntityFrameworkCore;
+using InsuranceManagement.Api.Infrastructure.Repositories;
 
 namespace InsuranceManagement.Api.Application.Policies;
 
-public class PolicyService(AppDbContext dbContext) : IPolicyService
+public class PolicyService(
+    IPolicyRepository policyRepository,
+    ICustomerRepository customerRepository) : IPolicyService
 {
     public async Task<PolicyResponse> IssueAsync(
         IssuePolicyRequest request,
         CancellationToken cancellationToken = default)
     {
-        var productCode = NormalizeProductCode(request.ProductCode);
-
-        var customer = await dbContext.Customers
-            .AsNoTracking()
-            .Where(customer => customer.Id == request.CustomerId)
-            .Select(customer => new { customer.Id, customer.IsActive })
-            .FirstOrDefaultAsync(cancellationToken);
+        var customer = await customerRepository.GetByIdAsync(request.CustomerId, cancellationToken: cancellationToken);
 
         if (customer is null)
         {
@@ -29,11 +24,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
             throw new ConflictException("Cannot issue a policy to an inactive customer.");
         }
 
-        var product = await dbContext.PolicyProducts
-            .AsNoTracking()
-            .Where(product => product.Code == productCode)
-            .Select(product => new { product.Code, product.IsActive })
-            .FirstOrDefaultAsync(cancellationToken);
+        var product = await policyRepository.GetProductAsync(request.ProductCode, cancellationToken);
 
         if (product is null)
         {
@@ -59,8 +50,8 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        dbContext.Policies.Add(policy);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        policyRepository.Add(policy);
+        await policyRepository.SaveChangesAsync(cancellationToken);
 
         return MapPolicy(policy);
     }
@@ -69,18 +60,18 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         PolicyFilter filter,
         CancellationToken cancellationToken = default)
     {
-        var policies = await BuildPolicyQuery(filter)
-            .OrderByDescending(policy => policy.CreatedAt)
-            .ToListAsync(cancellationToken);
+        var policies = await policyRepository.GetAllAsync(
+            filter.CustomerId,
+            filter.ProductCode,
+            filter.Status,
+            cancellationToken);
 
         return policies.Select(MapPolicy).ToList();
     }
 
     public async Task<PolicyResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var policy = await GetPolicyOrThrowAsync(
-            BuildPolicyQuery().Where(policy => policy.Id == id),
-            cancellationToken);
+        var policy = await GetPolicyOrThrowAsync(id, cancellationToken);
 
         return MapPolicy(policy);
     }
@@ -90,9 +81,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         UpdatePolicyRequest request,
         CancellationToken cancellationToken = default)
     {
-        var policy = await GetPolicyOrThrowAsync(
-            BuildPolicyQuery(asNoTracking: false).Where(policy => policy.Id == id),
-            cancellationToken);
+        var policy = await GetPolicyOrThrowAsync(id, cancellationToken, track: true);
 
         if (policy.Status == PolicyStatus.Cancelled)
         {
@@ -105,7 +94,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         policy.DetailsJson = request.DetailsJson;
         policy.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await policyRepository.SaveChangesAsync(cancellationToken);
 
         return MapPolicy(policy);
     }
@@ -117,58 +106,31 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
     {
         var cancellationReason = request.Reason.Trim();
 
-        var policy = await GetPolicyOrThrowAsync(
-            BuildPolicyQuery(asNoTracking: false).Where(policy => policy.Id == id),
-            cancellationToken);
+        var policy = await GetPolicyOrThrowAsync(id, cancellationToken, track: true);
 
         if (policy.Status == PolicyStatus.Cancelled)
         {
             throw new ConflictException("Policy is already cancelled.");
         }
 
-        policy.Status = PolicyStatus.Cancelled;
-        policy.CancelledAt = DateTimeOffset.UtcNow;
-        policy.CancellationReason = cancellationReason;
-        policy.UpdatedAt = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        policy.Status = PolicyStatus.Cancelled;
+        policy.CancelledAt = now;
+        policy.CancellationReason = cancellationReason;
+        policy.UpdatedAt = now;
+
+        await policyRepository.SaveChangesAsync(cancellationToken);
 
         return MapPolicy(policy);
     }
 
-    private IQueryable<Policy> BuildPolicyQuery(PolicyFilter? filter = null, bool asNoTracking = true)
+    private async Task<Policy> GetPolicyOrThrowAsync(
+        Guid id,
+        CancellationToken cancellationToken,
+        bool track = false)
     {
-        var query = dbContext.Policies.AsQueryable();
-
-        if (asNoTracking)
-        {
-            query = query.AsNoTracking();
-        }
-
-        if (filter is not null && filter.CustomerId.HasValue)
-        {
-            query = query.Where(policy => policy.CustomerId == filter.CustomerId.Value);
-        }
-
-        if (filter is not null && !string.IsNullOrWhiteSpace(filter.ProductCode))
-        {
-            var productCode = NormalizeProductCode(filter.ProductCode);
-            query = query.Where(policy => policy.ProductCode == productCode);
-        }
-
-        if (filter is not null && filter.Status.HasValue)
-        {
-            query = query.Where(policy => policy.Status == filter.Status.Value);
-        }
-
-        return query;
-    }
-
-    private static async Task<Policy> GetPolicyOrThrowAsync(
-        IQueryable<Policy> query,
-        CancellationToken cancellationToken)
-    {
-        var policy = await query.FirstOrDefaultAsync(cancellationToken);
+        var policy = await policyRepository.GetByIdAsync(id, track, cancellationToken);
 
         if (policy is null)
         {
@@ -176,11 +138,6 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         }
 
         return policy;
-    }
-
-    private static string NormalizeProductCode(string productCode)
-    {
-        return productCode.Trim().ToUpperInvariant();
     }
 
     private static string GeneratePolicyNumber()

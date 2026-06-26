@@ -1,54 +1,46 @@
-using System.Linq.Expressions;
 using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Application.Policies;
 using InsuranceManagement.Api.Domain;
-using InsuranceManagement.Api.Infrastructure;
-using Microsoft.EntityFrameworkCore;
+using InsuranceManagement.Api.Infrastructure.Repositories;
 
 namespace InsuranceManagement.Api.Application.Customers;
 
-public class CustomerService(AppDbContext dbContext) : ICustomerService
+public class CustomerService(
+    ICustomerRepository customerRepository,
+    IPolicyRepository policyRepository) : ICustomerService
 {
     public async Task<CustomerResponse> CreateAsync(
         CreateCustomerRequest request,
         CancellationToken cancellationToken = default)
     {
-        var email = NormalizeEmail(request.Email);
-
         var customer = new Customer
         {
             Id = Guid.NewGuid(),
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
-            Email = email,
+            Email = NormalizeEmail(request.Email),
             PhoneNumber = request.PhoneNumber.Trim(),
             Address = request.Address.Trim(),
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        dbContext.Customers.Add(customer);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        customerRepository.Add(customer);
+        await customerRepository.SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
 
     public async Task<IReadOnlyList<CustomerResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var customers = await dbContext.Customers
-            .AsNoTracking()
-            .OrderBy(customer => customer.LastName)
-            .ThenBy(customer => customer.FirstName)
-            .ToListAsync(cancellationToken);
+        var customers = await customerRepository.GetAllAsync(cancellationToken);
 
         return customers.Select(MapCustomer).ToList();
     }
 
     public async Task<CustomerResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var customer = await GetCustomerOrThrowAsync(
-            customer => customer.Id == id,
-            cancellationToken);
+        var customer = await GetCustomerOrThrowAsync(id, cancellationToken);
 
         return MapCustomer(customer);
     }
@@ -58,31 +50,23 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         UpdateCustomerRequest request,
         CancellationToken cancellationToken = default)
     {
-        var customer = await GetCustomerOrThrowAsync(
-            customer => customer.Id == id,
-            cancellationToken,
-            asNoTracking: false);
-
-        var email = NormalizeEmail(request.Email);
+        var customer = await GetCustomerOrThrowAsync(id, cancellationToken, track: true);
 
         customer.FirstName = request.FirstName.Trim();
         customer.LastName = request.LastName.Trim();
-        customer.Email = email;
+        customer.Email = NormalizeEmail(request.Email);
         customer.PhoneNumber = request.PhoneNumber.Trim();
         customer.Address = request.Address.Trim();
         customer.UpdatedAt = DateTimeOffset.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await customerRepository.SaveChangesAsync(cancellationToken);
 
         return MapCustomer(customer);
     }
 
     public async Task DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var customer = await GetCustomerOrThrowAsync(
-            customer => customer.Id == id,
-            cancellationToken,
-            asNoTracking: false);
+        var customer = await GetCustomerOrThrowAsync(id, cancellationToken, track: true);
 
         if (!customer.IsActive)
         {
@@ -91,9 +75,7 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
 
         var now = DateTimeOffset.UtcNow;
 
-        var activePolicies = await dbContext.Policies
-            .Where(policy => policy.CustomerId == id && policy.Status == PolicyStatus.Active)
-            .ToListAsync(cancellationToken);
+        var activePolicies = await policyRepository.GetActiveByCustomerAsync(id, cancellationToken);
 
         foreach (var policy in activePolicies)
         {
@@ -106,39 +88,26 @@ public class CustomerService(AppDbContext dbContext) : ICustomerService
         customer.IsActive = false;
         customer.UpdatedAt = now;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await customerRepository.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<PolicyResponse>> GetPoliciesAsync(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        _ = await GetCustomerOrThrowAsync(
-            customer => customer.Id == id,
-            cancellationToken);
+        _ = await GetCustomerOrThrowAsync(id, cancellationToken);
 
-        var policies = await dbContext.Policies
-            .AsNoTracking()
-            .Where(policy => policy.CustomerId == id)
-            .OrderByDescending(policy => policy.CreatedAt)
-            .ToListAsync(cancellationToken);
+        var policies = await policyRepository.GetByCustomerAsync(id, cancellationToken);
 
         return policies.Select(MapPolicy).ToList();
     }
 
     private async Task<Customer> GetCustomerOrThrowAsync(
-        Expression<Func<Customer, bool>> predicate,
+        Guid id,
         CancellationToken cancellationToken,
-        bool asNoTracking = true)
+        bool track = false)
     {
-        var query = dbContext.Customers.AsQueryable();
-
-        if (asNoTracking)
-        {
-            query = query.AsNoTracking();
-        }
-
-        var customer = await query.FirstOrDefaultAsync(predicate, cancellationToken);
+        var customer = await customerRepository.GetByIdAsync(id, track, cancellationToken);
 
         if (customer is null)
         {

@@ -1,0 +1,29 @@
+# Build output
+**/bin/
+**/obj/
+
+# Test / coverage output
+**/TestResults/
+**/coverage/
+
+# Tests are not needed in the image
+tests/
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+
+# Git / IDE / OS
+.git/
+.gitignore
+.vs/
+.vscode/
+**/*.user
+
+# Docker / docs
+Dockerfile
+.dockerignore
+docker-compose*.yml
+**/*.md
+session-context.txt
