@@ -45,10 +45,15 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 "Business rule conflict.",
                 conflictException.Message),
 
-            DbUpdateException dbUpdateException when IsDuplicateCustomerEmail(dbUpdateException) => (
+            DbUpdateException dbUpdateException when IsUniqueConstraintViolation(dbUpdateException, "Customers.Email") => (
                 StatusCodes.Status409Conflict,
                 "Business rule conflict.",
                 "A customer with this email already exists."),
+
+            DbUpdateException dbUpdateException when IsUniqueConstraintViolation(dbUpdateException, "Policies.PolicyNumber") => (
+                StatusCodes.Status409Conflict,
+                "Business rule conflict.",
+                "A policy with this policy number already exists."),
 
             _ => (
                 StatusCodes.Status500InternalServerError,
@@ -65,9 +70,9 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         };
     }
 
-    private static bool IsDuplicateCustomerEmail(DbUpdateException exception)
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception, string constraintTarget)
     {
         return exception.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteException &&
-            sqliteException.Message.Contains("Customers.Email", StringComparison.OrdinalIgnoreCase);
+            sqliteException.Message.Contains(constraintTarget, StringComparison.OrdinalIgnoreCase);
     }
 }

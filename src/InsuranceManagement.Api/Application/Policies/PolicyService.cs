@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using InsuranceManagement.Api.Application.Common;
 using InsuranceManagement.Api.Domain;
 using InsuranceManagement.Api.Infrastructure;
@@ -76,25 +75,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         PolicyFilter filter,
         CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Policies.AsNoTracking();
-
-        if (filter.CustomerId.HasValue)
-        {
-            query = query.Where(policy => policy.CustomerId == filter.CustomerId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.ProductCode))
-        {
-            var productCode = NormalizeProductCode(filter.ProductCode);
-            query = query.Where(policy => policy.ProductCode == productCode);
-        }
-
-        if (filter.Status.HasValue)
-        {
-            query = query.Where(policy => policy.Status == filter.Status.Value);
-        }
-
-        var policies = await query
+        var policies = await BuildPolicyQuery(filter)
             .OrderByDescending(policy => policy.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -104,7 +85,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
     public async Task<PolicyResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var policy = await GetPolicyOrThrowAsync(
-            policy => policy.Id == id,
+            BuildPolicyQuery().Where(policy => policy.Id == id),
             cancellationToken);
 
         return MapPolicy(policy);
@@ -116,9 +97,8 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         CancellationToken cancellationToken = default)
     {
         var policy = await GetPolicyOrThrowAsync(
-            policy => policy.Id == id,
-            cancellationToken,
-            asNoTracking: false);
+            BuildPolicyQuery(asNoTracking: false).Where(policy => policy.Id == id),
+            cancellationToken);
 
         if (policy.Status == PolicyStatus.Cancelled)
         {
@@ -142,15 +122,10 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         CancellationToken cancellationToken = default)
     {
         var cancellationReason = request.Reason.Trim();
-        if (string.IsNullOrWhiteSpace(cancellationReason))
-        {
-            throw new ConflictException("Cancellation reason is required.");
-        }
 
         var policy = await GetPolicyOrThrowAsync(
-            policy => policy.Id == id,
-            cancellationToken,
-            asNoTracking: false);
+            BuildPolicyQuery(asNoTracking: false).Where(policy => policy.Id == id),
+            cancellationToken);
 
         if (policy.Status == PolicyStatus.Cancelled)
         {
@@ -167,10 +142,7 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
         return MapPolicy(policy);
     }
 
-    private async Task<Policy> GetPolicyOrThrowAsync(
-        Expression<Func<Policy, bool>> predicate,
-        CancellationToken cancellationToken,
-        bool asNoTracking = true)
+    private IQueryable<Policy> BuildPolicyQuery(PolicyFilter? filter = null, bool asNoTracking = true)
     {
         var query = dbContext.Policies.AsQueryable();
 
@@ -179,7 +151,30 @@ public class PolicyService(AppDbContext dbContext) : IPolicyService
             query = query.AsNoTracking();
         }
 
-        var policy = await query.FirstOrDefaultAsync(predicate, cancellationToken);
+        if (filter is not null && filter.CustomerId.HasValue)
+        {
+            query = query.Where(policy => policy.CustomerId == filter.CustomerId.Value);
+        }
+
+        if (filter is not null && !string.IsNullOrWhiteSpace(filter.ProductCode))
+        {
+            var productCode = NormalizeProductCode(filter.ProductCode);
+            query = query.Where(policy => policy.ProductCode == productCode);
+        }
+
+        if (filter is not null && filter.Status.HasValue)
+        {
+            query = query.Where(policy => policy.Status == filter.Status.Value);
+        }
+
+        return query;
+    }
+
+    private static async Task<Policy> GetPolicyOrThrowAsync(
+        IQueryable<Policy> query,
+        CancellationToken cancellationToken)
+    {
+        var policy = await query.FirstOrDefaultAsync(cancellationToken);
 
         if (policy is null)
         {
