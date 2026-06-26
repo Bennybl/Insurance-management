@@ -1,6 +1,6 @@
 namespace InsuranceManagement.Api.Domain;
 
-public sealed class PolicyProduct
+public class PolicyProduct
 {
     public string Code { get; set; } = string.Empty;
 

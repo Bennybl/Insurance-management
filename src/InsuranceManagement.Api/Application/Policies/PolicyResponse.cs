@@ -1,6 +1,8 @@
-namespace InsuranceManagement.Api.Domain;
+using InsuranceManagement.Api.Domain;
 
-public class Policy
+namespace InsuranceManagement.Api.Application.Policies;
+
+public class PolicyResponse
 {
     public Guid Id { get; set; }
 
@@ -27,8 +29,4 @@ public class Policy
     public DateTimeOffset? CancelledAt { get; set; }
 
     public string? CancellationReason { get; set; }
-
-    public Customer? Customer { get; set; }
-
-    public PolicyProduct? Product { get; set; }
 }

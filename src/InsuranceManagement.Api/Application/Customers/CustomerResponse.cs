@@ -1,6 +1,6 @@
-namespace InsuranceManagement.Api.Domain;
+namespace InsuranceManagement.Api.Application.Customers;
 
-public class Customer
+public class CustomerResponse
 {
     public Guid Id { get; set; }
 
@@ -14,11 +14,9 @@ public class Customer
 
     public string Address { get; set; } = string.Empty;
 
-    public bool IsActive { get; set; } = true;
+    public bool IsActive { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
-
-    public ICollection<Policy> Policies { get; set; } = new List<Policy>();
 }
