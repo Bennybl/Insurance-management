@@ -24,10 +24,10 @@ public class PolicyProductConfiguration : IEntityTypeConfiguration<PolicyProduct
             .IsRequired();
 
         builder.HasData(
-            new PolicyProduct { Code = "CAR", Name = "Car Insurance", IsActive = true },
-            new PolicyProduct { Code = "HEALTH", Name = "Health Insurance", IsActive = true },
-            new PolicyProduct { Code = "LIFE", Name = "Life Insurance", IsActive = true },
-            new PolicyProduct { Code = "HOME", Name = "Home Insurance", IsActive = true },
-            new PolicyProduct { Code = "TRAVEL", Name = "Travel Insurance", IsActive = true });
+            new { Code = "CAR", Name = "Car Insurance", IsActive = true },
+            new { Code = "HEALTH", Name = "Health Insurance", IsActive = true },
+            new { Code = "LIFE", Name = "Life Insurance", IsActive = true },
+            new { Code = "HOME", Name = "Home Insurance", IsActive = true },
+            new { Code = "TRAVEL", Name = "Travel Insurance", IsActive = true });
     }
 }
